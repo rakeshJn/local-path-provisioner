@@ -56,7 +56,7 @@ default values.
 | Parameter                           | Description                                                                     | Default                                                                             |
 | ----------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `image.repository`                  | Local Path Provisioner image name                                               | `rancher/local-path-provisioner`                                                    |
-| `image.tag`                         | Local Path Provisioner image tag                                                | `v0.0.13`                                                                            |
+| `image.tag`                         | Local Path Provisioner image tag                                                | `v0.0.14`                                                                            |
 | `image.pullPolicy`                  | Image pull policy                                                               | `IfNotPresent`                                                                      |
 | `storageClass.create`               | If true, create a `StorageClass`                                                | `true`                                                                              |
 | `storageClass.provisionerName`      | The provisioner name for the storage class                                      | `nil`                                                                               |
@@ -71,6 +71,8 @@ default values.
 | `nodeSelector`                      | Node labels for Local Path Provisioner pod assignment                           | `{}`                                                                                |
 | `tolerations`                       | Node taints to tolerate                                                         | `[]`                                                                                |
 | `affinity`                          | Pod affinity                                                                    | `{}`                                                                                |
+| `setup`                             | Configuration of script to execute setup operations on each node                | #!/bin/sh<br>path=$1<br>mkdir -m 0777 -p ${path}                                    |
+| `teardown`                          | Configuration of script to execute teardown operations on each node             | #!/bin/sh<br>path=$1<br>rm -rf ${path}                                            |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
 

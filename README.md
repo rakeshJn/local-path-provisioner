@@ -9,7 +9,7 @@ Local Path Provisioner provides a way for the Kubernetes users to utilize the lo
 
 ### Pros
 Dynamic provisioning the volume using host path.
-* Currently the Kubernetes [Local Volume provisioner](https://github.com/kubernetes-incubator/external-storage/tree/master/local-volume) cannot do dynamic provisioning for the host path volumes.
+* Currently the Kubernetes [Local Volume provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner) cannot do dynamic provisioning for the host path volumes.
 
 ### Cons
 1. No support for the volume capacity limit currently.
@@ -38,7 +38,7 @@ local-path-provisioner-d744ccf98-xfcbk   1/1       Running   0          7m
 
 Check and follow the provisioner log using:
 ```
-$ kubectl -n local-path-storage logs -f local-path-provisioner-d744ccf98-xfcbk
+$ kubectl -n local-path-storage logs -f -l app=local-path-provisioner
 ```
 
 ## Usage
@@ -129,6 +129,14 @@ data:
                 }
                 ]
         }
+  setup: |-
+        #!/bin/sh
+        path=$1
+        mkdir -m 0777 -p ${path}
+  teardown: |-
+        #!/bin/sh
+        path=$1
+        rm -rf ${path}
 
 ```
 

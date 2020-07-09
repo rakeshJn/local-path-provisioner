@@ -119,9 +119,11 @@ func (p *LocalPathProvisioner) refreshConfig() error {
 
 func (p *LocalPathProvisioner) watchAndRefreshConfig() {
 	go func() {
+		ticker := time.NewTicker(ConfigFileCheckInterval)
+		defer ticker.Stop()
 		for {
 			select {
-			case <-time.Tick(ConfigFileCheckInterval):
+			case <-ticker.C:
 				if err := p.refreshConfig(); err != nil {
 					logrus.Errorf("failed to load the new config file: %v", err)
 				}
@@ -188,16 +190,14 @@ func (p *LocalPathProvisioner) Provision(opts pvController.ProvisionOptions) (*v
 	logrus.Infof("Creating volume %v at %v:%v", name, node.Name, path)
 
 	createCmdsForPath := []string{
-		"mkdir",
-		"-m", "0777",
-		"-p",
+		"/bin/sh",
+		"/script/setup",
 	}
 	if err := p.createHelperPod(ActionTypeCreate, createCmdsForPath, name, path, node.Name); err != nil {
 		return nil, err
 	}
 
 	fs := v1.PersistentVolumeFilesystem
-	hostPathType := v1.HostPathDirectoryOrCreate
 	return &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -210,9 +210,8 @@ func (p *LocalPathProvisioner) Provision(opts pvController.ProvisionOptions) (*v
 				v1.ResourceName(v1.ResourceStorage): pvc.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
-				HostPath: &v1.HostPathVolumeSource{
+				Local: &v1.LocalVolumeSource{
 					Path: path,
-					Type: &hostPathType,
 				},
 			},
 			NodeAffinity: &v1.VolumeNodeAffinity{
@@ -246,7 +245,7 @@ func (p *LocalPathProvisioner) Delete(pv *v1.PersistentVolume) (err error) {
 	}
 	if pv.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimRetain {
 		logrus.Infof("Deleting volume %v at %v:%v", pv.Name, node, path)
-		cleanupCmdsForPath := []string{"rm", "-rf"}
+		cleanupCmdsForPath := []string{"/bin/sh", "/script/teardown"}
 		if err := p.createHelperPod(ActionTypeDelete, cleanupCmdsForPath, pv.Name, path, node); err != nil {
 			logrus.Infof("clean up volume %v failed: %v", pv.Name, err)
 			return err
@@ -262,11 +261,11 @@ func (p *LocalPathProvisioner) getPathAndNodeForPV(pv *v1.PersistentVolume) (pat
 		err = errors.Wrapf(err, "failed to delete volume %v", pv.Name)
 	}()
 
-	hostPath := pv.Spec.PersistentVolumeSource.HostPath
-	if hostPath == nil {
-		return "", "", fmt.Errorf("no HostPath set")
+	local := pv.Spec.PersistentVolumeSource.Local
+	if local == nil {
+		return "", "", fmt.Errorf("no Local set")
 	}
-	path = hostPath.Path
+	path = local.Path
 
 	nodeAffinity := pv.Spec.NodeAffinity
 	if nodeAffinity == nil {
@@ -321,7 +320,8 @@ func (p *LocalPathProvisioner) createHelperPod(action ActionType, cmdsForPath []
 	hostPathType := v1.HostPathDirectoryOrCreate
 	helperPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: string(action) + "-" + name,
+			Name:      string(action) + "-" + name,
+			Namespace: p.namespace,
 		},
 		Spec: v1.PodSpec{
 			RestartPolicy: v1.RestartPolicyNever,
@@ -342,6 +342,11 @@ func (p *LocalPathProvisioner) createHelperPod(action ActionType, cmdsForPath []
 							ReadOnly:  false,
 							MountPath: "/data/",
 						},
+						{
+							Name:      "script",
+							ReadOnly:  false,
+							MountPath: "/script",
+						},
 					},
 					ImagePullPolicy: v1.PullIfNotPresent,
 				},
@@ -353,6 +358,26 @@ func (p *LocalPathProvisioner) createHelperPod(action ActionType, cmdsForPath []
 						HostPath: &v1.HostPathVolumeSource{
 							Path: parentDir,
 							Type: &hostPathType,
+						},
+					},
+				},
+				{
+					Name: "script",
+					VolumeSource: v1.VolumeSource{
+						ConfigMap: &v1.ConfigMapVolumeSource{
+							LocalObjectReference: v1.LocalObjectReference{
+								Name: "local-path-config",
+							},
+							Items: []v1.KeyToPath{
+								{
+									Key:  "setup",
+									Path: "setup",
+								},
+								{
+									Key:  "teardown",
+									Path: "teardown",
+								},
+							},
 						},
 					},
 				},

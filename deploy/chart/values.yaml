@@ -4,8 +4,12 @@ replicaCount: 1
 
 image:
   repository: rancher/local-path-provisioner
-  tag: v0.0.13
+  tag: v0.0.14
   pullPolicy: IfNotPresent
+
+helperImage:
+  repository: busybox
+  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
@@ -74,3 +78,13 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+setup: |-
+  #!/bin/sh
+  path=$1
+  mkdir -m 0777 -p ${path}
+
+teardown: |-
+  #!/bin/sh
+  path=$1
+  rm -rf ${path}
